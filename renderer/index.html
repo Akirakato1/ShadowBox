@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Shadow Box Designer</title>
+<link rel="stylesheet" href="src/styles.css" />
+</head>
+<body>
+<header>
+  <h1>Shadow Box Designer</h1>
+  <p class="subtitle">Inverse-project a circular wall image into CNC cutout patterns and a printable 3D STL base file for a wall-mounted shadow lamp.</p>
+  <nav class="tabs">
+    <button class="tab active" data-tab="geometry">3D Geometry</button>
+    <button class="tab" data-tab="designer">Pattern Designer</button>
+    <button class="tab" data-tab="math">Math Reference</button>
+  </nav>
+</header>
+
+<main>
+  <section class="shared-panel">
+    <div class="shared-header">
+      <div>
+        <span class="shared-title">Shared geometry (applies to both tabs)</span>
+        <div class="current-file">Current design: <span id="current-design-name">untitled</span></div>
+      </div>
+      <div class="shared-actions-wrap">
+        <div id="save-toast" class="save-toast" hidden>Saved</div>
+        <div class="shared-actions">
+          <button id="state-save">Save</button>
+          <button id="state-saveas">Save As…</button>
+          <button id="state-open">Open…</button>
+          <button id="state-reveal" title="Open the data folder">Reveal folder</button>
+        </div>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="ctrl">
+        <label>Box width (W, cm)<span id="s-W-out">15</span></label>
+        <input type="range" min="6" max="80" value="15" step="1" id="s-W" />
+      </div>
+      <div class="ctrl">
+        <label>Box height (H, cm)<span id="s-H-out">15</span></label>
+        <input type="range" min="6" max="100" value="15" step="1" id="s-H" />
+      </div>
+      <div class="ctrl">
+        <label>Box depth (d, cm)<span id="s-d-out">6</span></label>
+        <input type="range" min="3" max="50" value="6" step="1" id="s-d" />
+      </div>
+      <div class="ctrl">
+        <label>Light z (% of depth)<span id="s-lightz-out">90</span></label>
+        <input type="range" min="10" max="90" value="90" step="1" id="s-lightz" />
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-geometry" class="tab-panel active">
+    <div class="canvas-wrap" id="three-wrap">
+      <div class="legend">
+        <div><span class="dot" style="background:#888780"></span>Wall (projection plane)</div>
+        <div><span class="dot" style="background:#7F77DD"></span>Box walls (carvable)</div>
+        <div><span class="dot" style="background:#EF9F27"></span>Light source</div>
+        <div><span class="dot" style="background:#E24B4A"></span>Lid (occluder)</div>
+        <div><span class="line" style="background:#EF9F27"></span>Light rays</div>
+        <div><span class="line" style="background:#E24B4A"></span>Blocked by lid</div>
+      </div>
+      <div class="hint">drag to orbit · scroll to zoom</div>
+    </div>
+
+    <div class="controls">
+      <div class="ctrl">
+        <label>Lid height above light (h)<span id="g-h-out">8</span></label>
+        <input type="range" min="2" max="20" value="8" step="1" id="g-h" />
+      </div>
+      <div class="ctrl">
+        <label>Lid radius<span id="g-rlid-out">10</span></label>
+        <input type="range" min="3" max="20" value="10" step="1" id="g-rlid" />
+      </div>
+      <div class="ctrl">
+        <label>Ray density<span id="g-rays-out">24</span></label>
+        <input type="range" min="0" max="60" value="24" step="2" id="g-rays" />
+      </div>
+    </div>
+
+    <div class="buttons">
+      <button id="g-toggle-cutouts">Toggle sample cutouts</button>
+      <button id="g-toggle-lid">Toggle lid</button>
+      <button id="g-reset-view">Reset view</button>
+    </div>
+
+    <div class="buttons" style="margin-top:0.5rem;">
+      <button id="g-download-stl">Download box STL</button>
+      <label class="hint-inline" style="display:inline-flex;align-items:center;gap:6px;margin-left:6px;">
+        Thickness (mm):
+        <input type="number" id="g-thickness" value="2" step="0.5" min="0.5" max="20"
+               style="width:60px;padding:4px 6px;background:var(--surface-2);
+                      border:0.5px solid var(--border-2);border-radius:var(--radius-sm);
+                      color:var(--text);font:inherit;font-size:13px;" />
+      </label>
+      <span class="hint-inline">single .stl with all 5 pieces (4 walls + base plate) as separate solids</span>
+    </div>
+  </section>
+
+  <section id="tab-designer" class="tab-panel">
+    <div class="design-grid">
+      <div>
+        <div class="canvas-label">Target image (vector — white = lit)</div>
+        <div class="target-stack">
+          <canvas id="target" width="280" height="280"></canvas>
+          <div id="target-svg" class="svg-display"></div>
+        </div>
+      </div>
+      <div>
+        <div class="canvas-label">Simulated shadow on wall</div>
+        <canvas id="sim" width="280" height="280"></canvas>
+      </div>
+    </div>
+
+    <div class="buttons" id="preset-buttons">
+      <button id="preset-rays">Sun rays</button>
+      <button id="preset-flower">Flower</button>
+      <button id="preset-stars">Star ring</button>
+      <button id="preset-text">Text ring</button>
+      <button id="upload-image">Upload image…</button>
+      <button id="upload-svg">Upload SVG…</button>
+      <button id="clear">Clear</button>
+      <span class="hint-inline">click+drag to draw on the target image (shift+drag to erase)</span>
+    </div>
+    <input type="file" id="image-file" accept="image/png,image/jpeg,image/webp" style="display:none" />
+    <input type="file" id="svg-file" accept=".svg,image/svg+xml" style="display:none" />
+    <div class="buttons" id="image-edit-controls" style="display:none">
+      <button id="image-apply">Apply crop</button>
+      <button id="image-cancel">Cancel</button>
+      <span class="hint-inline">drag to pan · scroll to zoom · only the white circle is kept</span>
+    </div>
+
+    <div class="controls">
+      <div class="ctrl">
+        <label>Image radius (cm)<span id="d-R-out">60</span></label>
+        <input type="range" min="20" max="120" value="60" step="2" id="d-R" />
+      </div>
+      <div class="ctrl">
+        <label>Min cutout margin (mm)<span id="d-margin-out">3</span></label>
+        <input type="range" min="0" max="10" value="3" step="1" id="d-margin" />
+      </div>
+    </div>
+
+    <div class="canvas-label" style="margin-top:1.5rem;">Computed cutout patterns (vector — these get CNC'd into the side walls)</div>
+    <div class="walls-grid">
+      <div class="wall-card">
+        <div class="wall-label">Top wall (viewed from inside)</div>
+        <div id="wall-top" class="wall-svg"></div>
+      </div>
+      <div class="wall-card">
+        <div class="wall-label">Bottom wall</div>
+        <div id="wall-bot" class="wall-svg"></div>
+      </div>
+      <div class="wall-card">
+        <div class="wall-label">Left wall</div>
+        <div id="wall-left" class="wall-svg"></div>
+      </div>
+      <div class="wall-card">
+        <div class="wall-label">Right wall</div>
+        <div id="wall-right" class="wall-svg"></div>
+      </div>
+    </div>
+    <p class="footnote">
+      Each wall canvas: horizontal axis = position along wall length, vertical axis = depth (top of canvas = front of box, far from wall, near the lid; bottom = back of box, against the projection wall). White = remove material. Red zone at top = forbidden (at or past the light's z-level — rays from a cutout there go forward, not toward the wall).
+    </p>
+
+    <div class="buttons" style="margin-top:1.5rem;">
+      <button id="export-svg">Export SVGs (one per wall)</button>
+      <button id="export-png">Export target as PNG</button>
+    </div>
+  </section>
+
+  <div id="modal-saveas" class="modal" hidden>
+    <div class="modal-box">
+      <h3>Save design as…</h3>
+      <p class="modal-sub">Files are kept in the app data folder.</p>
+      <input type="text" id="saveas-name" placeholder="design name" autocomplete="off" />
+      <div class="modal-error" id="saveas-error" hidden></div>
+      <div class="modal-actions">
+        <button id="saveas-confirm" class="primary">Save</button>
+        <button id="saveas-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-open" class="modal" hidden>
+    <div class="modal-box">
+      <h3>Open design</h3>
+      <p class="modal-sub" id="open-data-dir"></p>
+      <ul id="design-list" class="design-list"></ul>
+      <div class="modal-empty" id="design-list-empty" hidden>No saved designs yet.</div>
+      <div class="modal-actions">
+        <button id="open-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <section id="tab-math" class="tab-panel">
+    <article class="prose">
+      <h2>Geometry</h2>
+      <p>Coordinate system: the wall is the plane <code>z = 0</code>. The box sits on the wall and extends outward in <code>+z</code>. The box occupies <code>x ∈ [-W/2, W/2]</code>, <code>y ∈ [-H/2, H/2]</code>, <code>z ∈ [0, d]</code>. The back of the box is sealed against the wall; light reaches the wall only through cutouts in the four side walls.</p>
+      <p>Light source at <code>L = (0, 0, c<sub>z</sub>)</code>, where <code>c<sub>z</sub></code> is the bulb's height along the depth axis. The "Light z" slider sets <code>c<sub>z</sub> = lightFrac · d</code>; default <code>50%</code> places the bulb at the geometric center (<code>d/2</code>). Lower values pull the bulb toward the wall (more of the box becomes "in front of" the light and is unusable for cutouts); higher values push it forward. Lid is parallel to the wall at <code>z = c<sub>z</sub> + h</code>, blocking forward glare.</p>
+
+      <h2>Forward map</h2>
+      <p>For a cutout at <code>(u, z)</code> on the right wall (<code>x = W/2</code>), the ray from <code>L</code> through that point hits the wall at:</p>
+      <pre><code>t      = c_z / (c_z - z)
+X_wall = (W/2) · t
+Y_wall = u · t</code></pre>
+      <p>Symmetrically for the other three walls (swap roles of <code>x</code> and <code>y</code> for top/bottom; flip sign for left/bot). Valid only when <code>z &lt; c<sub>z</sub></code> — cutouts past the light project forward, not toward the wall.</p>
+
+      <h2>Inverse map</h2>
+      <p>For a target wall point <code>(X, Y)</code> outside the box footprint, decide which side wall handles it by comparing <code>|X| - W/2</code> vs <code>|Y| - H/2</code> — whichever is larger picks the dominant face. Then back-solve:</p>
+      <pre><code>// for the right face (X &gt; 0, |X|-W/2 &gt;= |Y|-H/2)
+t      = X / (W/2)
+z_cut  = c_z · (1 - 1/t)
+u_cut  = Y / t</code></pre>
+      <p>Constraints: <code>0 &lt; z_cut &lt; c<sub>z</sub> - margin</code>, <code>|u_cut| &lt; H/2</code>. Points violating these are unreachable on this wall.</p>
+
+      <h2>Why the maximum lit region is roughly a circle</h2>
+      <p>The point source plus rotational symmetry of the box-around-light means that, at equal cutout-z values, equal-radius wall points are reachable. Practically the achievable radius is limited by:</p>
+      <ul>
+        <li><strong>Structural margin</strong> near <code>z = d/2</code> — you can't carve infinitely close to the light's z-level.</li>
+        <li><strong>Inverse-square brightness falloff</strong> — far points become invisibly dim.</li>
+        <li><strong>Penumbra blur</strong> — finite bulb size produces soft shadows, blurrier the closer the cutout is to the bulb (or the farther from the wall).</li>
+      </ul>
+
+      <h2>Penumbra estimate</h2>
+      <p>For a bulb of diameter <code>D</code>, the blur radius on the wall at a point reached via a cutout at depth <code>z_cut</code>:</p>
+      <pre><code>blur ≈ D · (z_cut to wall distance) / (bulb to cutout distance)
+     = D · z_cut / (c_z - z_cut)</code></pre>
+      <p>So as <code>z_cut → c<sub>z</sub></code>, blur diverges. Substituting <code>z_cut</code> via the inverse map gives <code>blur = D · (2X/W − 1)</code> for the right face — independent of <code>c<sub>z</sub></code>. The light-z slider therefore doesn't change geometric image sharpness; it changes how much of the side panel is usable (more depth on the wall side) and where the cutouts physically sit.</p>
+
+      <h2>Brightness model</h2>
+      <p>Wall illuminance at point <code>(X, Y)</code> reached through a cutout of area <code>A</code>:</p>
+      <pre><code>E ≈ I · A · cos(θ) / r²</code></pre>
+      <p>where <code>r</code> is the source-to-wall distance, <code>θ</code> is the angle between the ray and the wall normal. To make outer regions match inner brightness, scale cutout area by roughly <code>r² / cos(θ)</code>.</p>
+    </article>
+  </section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/imagetracerjs@1.2.6/imagetracer_v1.2.6.js"></script>
+<script src="src/geometry.js"></script>
+<script src="src/projection.js"></script>
+<script src="src/designer.js"></script>
+<script src="src/storage.js"></script>
+<script src="src/stl_export.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>
